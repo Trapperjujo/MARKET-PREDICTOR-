@@ -209,6 +209,10 @@ def run_lstm(df_clean, forecast_days, lookback=60, epochs=25):
     for i in range(lookback, len(scaled)):
         X_all.append(scaled[i - lookback:i, 0])
         y_all.append(scaled[i, 0])
+    if len(X_all) < 10:
+        st.error(f"Dataset too small ({len(scaled)} days) for a {lookback}-day lookback window. Increase historical range or decrease lookback.")
+        return None
+
     X_all = np.array(X_all)[..., np.newaxis]
     y_all = np.array(y_all)
 
@@ -225,11 +229,13 @@ def run_lstm(df_clean, forecast_days, lookback=60, epochs=25):
         Dense(1),
     ])
     model.compile(optimizer="adam", loss="mse")
-    es = EarlyStopping(patience=5, restore_best_weights=True)
+    
+    val_split = 0.1 if len(Xtr) >= 10 else 0.0
+    callbacks = [EarlyStopping(patience=5, restore_best_weights=True)] if val_split > 0 else []
 
     with st.spinner("🧠 Training LSTM model…"):
         model.fit(Xtr, ytr, epochs=epochs, batch_size=32,
-                  validation_split=0.1, callbacks=[es], verbose=0)
+                  validation_split=val_split, callbacks=callbacks, verbose=0)
 
     y_pred_test = scaler.inverse_transform(model.predict(Xte)).ravel()
     y_test      = scaler.inverse_transform(yte.reshape(-1, 1)).ravel()
@@ -475,6 +481,10 @@ if raw.empty:
     st.stop()
 
 df = add_indicators(raw.copy()).dropna()
+
+if len(df) < 10:
+    st.warning("⚠️ Not enough data points available after calculating technical indicators (which require up to 50 days of warmup). Please increase your 'Historical Data Range' in the sidebar to at least 3mo or 6mo.")
+    st.stop()
 
 # Summary metrics
 last_price  = df["Close"].iloc[-1]
