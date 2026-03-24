@@ -117,6 +117,16 @@ def add_indicators(df: pd.DataFrame) -> pd.DataFrame:
     df["MA_20"]  = close.rolling(20).mean()
     df["MA_50"]  = close.rolling(50).mean()
 
+    # User's added Moving Averages
+    df['SMA_20'] = close.rolling(window=20).mean()
+    df['SMA_50'] = close.rolling(window=50).mean()
+    df['EMA_20'] = close.ewm(span=20, adjust=False).mean()
+
+    # 4. Generate crossover signals
+    df['Signal'] = 0
+    df.loc[(df['SMA_20'] > df['SMA_50']) & (df['SMA_20'].shift(1) <= df['SMA_50'].shift(1)), 'Signal'] = 1  # Buy
+    df.loc[(df['SMA_20'] < df['SMA_50']) & (df['SMA_20'].shift(1) >= df['SMA_50'].shift(1)), 'Signal'] = -1 # Sell
+
     roll_std       = close.rolling(20).std()
     df["BB_upper"] = df["MA_20"] + 2 * roll_std
     df["BB_lower"] = df["MA_20"] - 2 * roll_std
@@ -140,6 +150,7 @@ def add_indicators(df: pd.DataFrame) -> pd.DataFrame:
 
 FEATURE_COLS = [
     "MA_10", "MA_20", "MA_50",
+    "SMA_20", "SMA_50", "EMA_20", "Signal",
     "BB_upper", "BB_lower",
     "RSI", "MACD", "MACD_signal",
     "Return", "Volatility",
@@ -342,6 +353,19 @@ def make_price_chart(df, ticker, model_name, test_dates, y_pred_test,
                              line=dict(color=RED, width=1, dash="dot"), name="MA 20"), row=1, col=1)
     fig.add_trace(go.Scatter(x=dates, y=df["MA_50"],
                              line=dict(color=GREEN, width=1, dash="dot"), name="MA 50"), row=1, col=1)
+    fig.add_trace(go.Scatter(x=dates, y=df["EMA_20"],
+                             line=dict(color="#ffff00", width=1.5, dash="dash"), name="EMA 20"), row=1, col=1)
+
+    # Crossover Signals
+    buy_signals = df[df['Signal'] == 1]
+    sell_signals = df[df['Signal'] == -1]
+
+    fig.add_trace(go.Scatter(x=buy_signals.index, y=buy_signals['SMA_20'],
+                             mode='markers', marker=dict(color=GREEN, symbol='triangle-up', size=12),
+                             name='Buy Signal'), row=1, col=1)
+    fig.add_trace(go.Scatter(x=sell_signals.index, y=sell_signals['SMA_20'],
+                             mode='markers', marker=dict(color=RED, symbol='triangle-down', size=12),
+                             name='Sell Signal'), row=1, col=1)
 
     # Test predictions
     fig.add_trace(go.Scatter(x=test_dates, y=y_pred_test,
@@ -514,6 +538,21 @@ with c3: st.markdown(metric_html("Week Change", f"{week_pct:+.2f}%"), unsafe_all
 with c4: st.markdown(metric_html("RSI (14)", f"{rsi_now:.1f}",
                                   None if 30 < rsi_now < 70 else (1 if rsi_now <= 30 else -1)), unsafe_allow_html=True)
 with c5: st.markdown(metric_html("Data Points", f"{len(df):,}"), unsafe_allow_html=True)
+
+sma20_now = df["SMA_20"].iloc[-1]
+sma50_now = df["SMA_50"].iloc[-1]
+ema20_now = df["EMA_20"].iloc[-1]
+crossovers = df[df["Signal"] != 0]
+last_signal = "None"
+if not crossovers.empty:
+    last_sig_val = crossovers["Signal"].iloc[-1]
+    last_signal = "🟢 Buy" if last_sig_val == 1 else "🔴 Sell"
+    
+mc1, mc2, mc3, mc4 = st.columns(4)
+with mc1: st.markdown(metric_html("SMA 20", f"${sma20_now:.2f}"), unsafe_allow_html=True)
+with mc2: st.markdown(metric_html("SMA 50", f"${sma50_now:.2f}"), unsafe_allow_html=True)
+with mc3: st.markdown(metric_html("EMA 20", f"${ema20_now:.2f}"), unsafe_allow_html=True)
+with mc4: st.markdown(metric_html("Last Crossover", last_signal), unsafe_allow_html=True)
 
 st.markdown("---")
 
