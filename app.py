@@ -124,8 +124,8 @@ def add_indicators(df: pd.DataFrame) -> pd.DataFrame:
 
     # 4. Generate crossover signals
     df['Signal'] = 0
-    df.loc[(df['SMA_20'] > df['SMA_50']) & (df['SMA_20'].shift(1) <= df['SMA_50'].shift(1)), 'Signal'] = 1  # Buy
-    df.loc[(df['SMA_20'] < df['SMA_50']) & (df['SMA_20'].shift(1) >= df['SMA_50'].shift(1)), 'Signal'] = -1 # Sell
+    df.loc[(df['EMA_20'] > df['SMA_50']) & (df['EMA_20'].shift(1) <= df['SMA_50'].shift(1)), 'Signal'] = 1  # Buy
+    df.loc[(df['EMA_20'] < df['SMA_50']) & (df['EMA_20'].shift(1) >= df['SMA_50'].shift(1)), 'Signal'] = -1 # Sell
 
     roll_std       = close.rolling(20).std()
     df["BB_upper"] = df["MA_20"] + 2 * roll_std
@@ -360,10 +360,10 @@ def make_price_chart(df, ticker, model_name, test_dates, y_pred_test,
     buy_signals = df[df['Signal'] == 1]
     sell_signals = df[df['Signal'] == -1]
 
-    fig.add_trace(go.Scatter(x=buy_signals.index, y=buy_signals['SMA_20'],
+    fig.add_trace(go.Scatter(x=buy_signals.index, y=buy_signals['EMA_20'],
                              mode='markers', marker=dict(color=GREEN, symbol='triangle-up', size=12),
                              name='Buy Signal'), row=1, col=1)
-    fig.add_trace(go.Scatter(x=sell_signals.index, y=sell_signals['SMA_20'],
+    fig.add_trace(go.Scatter(x=sell_signals.index, y=sell_signals['EMA_20'],
                              mode='markers', marker=dict(color=RED, symbol='triangle-down', size=12),
                              name='Sell Signal'), row=1, col=1)
 
@@ -545,8 +545,10 @@ ema20_now = df["EMA_20"].iloc[-1]
 crossovers = df[df["Signal"] != 0]
 last_signal = "None"
 if not crossovers.empty:
-    last_sig_val = crossovers["Signal"].iloc[-1]
-    last_signal = "🟢 Buy" if last_sig_val == 1 else "🔴 Sell"
+    last_cross = crossovers.iloc[-1]
+    last_sig_val = last_cross["Signal"]
+    date_str = last_cross.name.strftime("%b %d, '%y")
+    last_signal = f"🟢 Buy ({date_str})" if last_sig_val == 1 else f"🔴 Sell ({date_str})"
     
 mc1, mc2, mc3, mc4 = st.columns(4)
 with mc1: st.markdown(metric_html("SMA 20", f"${sma20_now:.2f}"), unsafe_allow_html=True)
